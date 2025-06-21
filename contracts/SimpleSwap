@@ -476,7 +476,25 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         amounts[1] = amountOut;
     } // swapExactTokensForTokens
 
+     /**
+     * @dev return the price of token A in terms of tokenB, according to current reserves
+     * @param tokenA The address of the first token.
+     * @param tokenB The address of the second token.
+     * @return price The price of token A in decimals units of tokenB
+     */  
+    function getPrice(address tokenA, address tokenB) external view returns (uint256 price){
+        // gas saving, store reserves in local variables
+        uint reserveA = IERC20(tokenA).balanceOf(address(this));
+        uint reserveB = IERC20(tokenB).balanceOf(address(this));
 
+        // check if there is liquidity and if so, calculate price
+        if (reserveA > 0 && reserveB > 0){
+            price = (reserveB * 1e18)/ reserveA;
+        } else {
+            revert INSUFFICIENT_LIQUIDITY();
+        }
+
+    }
 
 
 } // contract SimpleSwap
