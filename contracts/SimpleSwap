@@ -94,7 +94,46 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      */
     event Swap(address indexed sender, address indexed receiver, uint amountAIn, uint amountBIn, uint amountAOut, uint amountBOut); 
 
-// errors
+     /*///////////////////////////////////////////////////////////////
+                           ERRORS
+      //////////////////////////////////////////////////////////////*/
+
+     /**
+      * @notice invalid token address for interaction
+      */
+    error INVALID_TOKEN();
+
+     /**
+      * @notice invalid address to send tokens to (address(0))
+      */
+    error INVALID_TO();
+
+     /**
+      * @notice insufficient amount of expected output tokens, 
+      * below minimum desired
+      */
+    error INSUFFICIENT_OUTPUT_AMOUNT();
+
+    /**
+      * @notice proposed liquidity provision would unbalance pool, 
+      * breaking the invariant x * y == k
+      */
+    error UNBALANCED_LIQUIDITY_PROVISION();
+
+    /**
+      * @notice deadline expired to perform operation
+      */
+    error DEADLINE_EXPIRED();
+
+    /**
+      * @notice invalid swap route
+      * in our simple set up, it should have length 2
+      * and consists of either [tokenA,tokenB] or [tokenB,tokenA]
+      */
+    error INVALID_SWAP_ROUTE();
+
+
+
 // modifiers
 
 
