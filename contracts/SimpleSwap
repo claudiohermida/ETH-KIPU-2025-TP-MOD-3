@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: MIT
+// Compatible with OpenZeppelin Contracts ^5.0.0
+pragma solidity ^0.8.27;
+
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+/// @title Interface for SimpleSwap
+interface ISimpleSwap {
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 amountADesired,
+        uint256 amountBDesired,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
+
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountA, uint256 amountB);
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external;
+
+    function getPrice(address tokenA, address tokenB) external view returns (uint256 price);
+    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) external view returns (uint256);
+}
+
+
+
+contract SimpleSwap is ISimpleSwap, ERC20 {
+
+
+     /*///////////////////////////////////////////////////////////////
+                           TYPES
+      //////////////////////////////////////////////////////////////*/
+
+    enum SwapDirection {
+        A_to_B, B_to_A
+    }
+
+     /*///////////////////////////////////////////////////////////////
+                           STATE
+      //////////////////////////////////////////////////////////////*/
+
+    IERC20 public _tokenA;
+    IERC20 public _tokenB;
+
+     /*///////////////////////////////////////////////////////////////
+                           EVENTS
+      //////////////////////////////////////////////////////////////*/
+    /**
+     * @notice someone added liquidity to the pool
+     * @param lProvider:  address of liquidity provider
+     * @param amountAIn: amount of token A deposited
+     * @param amountBIn: amount of token B deposited
+     * @param liquidityTokensOut: amount of LP shares minted
+     */
+    event LiquidityAdded(address indexed lProvider, uint amountAIn, uint amountBIn, uint liquidityTokensOut); 
+
+    /**
+     * @notice some LP removed liquidity to the pool
+     * @param lProvider:  address of liquidity provider
+     * @param liquidityTokensIn: amount of LP shares burnt
+     * @param amountAOut: amount of token A received/withdrawn
+     * @param amountBOut: amount of token B received/withdrawn
+     */
+    event LiquidityRemoved(address indexed lProvider, uint liquidityTokensIn, uint amountAOut, uint amountBOut); 
+    
+     /**
+     * @notice a swap has been performed, 
+     * either from A to B, in which case amountBIn == amountAOut == 0,
+     * or from B to A, in which case amountAIn == amountBOut == 0
+     * @param sender:  address of provider of input tokens
+     * @param receiver: address of recipient of output tokens
+     * @param amountAIn: amount of token A deposited
+     * @param amountBIn: amount of token B deposited
+     * @param amountAOut: amount of token A received/withdrawn
+     * @param amountBOut: amount of token B received/withdrawn
+     */
+    event Swap(address indexed sender, address indexed receiver, uint amountAIn, uint amountBIn, uint amountAOut, uint amountBOut); 
+
+// errors
+// modifiers
+
+
+
+    constructor(address tokenA_, address tokenB_) ERC20("LPShares_AB","LP_AB"){
+        _tokenA = IERC20(tokenA_);
+        _tokenB = IERC20(tokenB_)
+    ]
+}
