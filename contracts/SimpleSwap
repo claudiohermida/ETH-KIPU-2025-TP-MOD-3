@@ -59,8 +59,8 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
 
     // we should have used private variables instantiated in the constructor for the two tokens,
     // rather than overcomplicating the swap interface by adding the token addresses in every function call
-    // IERC20 public _tokenA;
-    // IERC20 public _tokenB;
+     IERC20 public _tokenA;
+     IERC20 public _tokenB;
 
      /*///////////////////////////////////////////////////////////////
                            EVENTS
@@ -334,7 +334,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         }
     } // addLiquidity
 
-         /**
+    /**
      * @dev Removes liquidity from the pool.
      * @param tokenA The address of the first token.
      * @param tokenB The address of the second token.
@@ -383,4 +383,101 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         
     } // removeLiquidity
 
+    /**
+     * @dev swap a given amount of tokens for its corresponding pair in the pool, according to the current balance
+     * @param amountIn The amount of tokens provided to swap
+     * @param amountOutMin The minimum of tokens accepted in exchange (slippage protection)
+     * @param path The route of token addresses to follow 
+     * (in our case, only 2, either [tokenA,tokenB] or [tokenB,tokenA])
+     * @param to The address to receive the exchanged tokens.
+     * @param deadline The unix timestamp after which the transaction will revert.
+     * @return amounts The amount of tokens in and out along the path 
+     * (only 2 in our case, hence the amount of token in and out)
+     */
+     function swapExactTokensForTokens(
+                uint amountIn, 
+                uint amountOutMin, 
+                address[] calldata path, 
+                address to,     
+                uint deadline
+            ) external onlyBeforeDeadline(deadline) onlyValidAddress(to) returns (uint[] memory amounts){
+        // must determine the direction of the swap A_to_B or B_to_A
+        // 1. check path has the right length
+        if (path.length != 2) {revert INVALID_SWAP_ROUTE()}
+
+        //2. obtain the address of the tokens in question
+        (address _token0, address _token1) = (path[0], path[1]);
+
+        //3. verify validity of addresses and determine direction of swap
+        SwapDirection direction;
+        if (_token0 == tokenA){
+            if (_token1 == tokenB){
+                direction = A_to_B;
+            } else {
+                revert INVALID_TOKEN();
+            }
+        } else {
+            if (_token0 == tokenB){
+                if (_token1 == tokenA){
+                   direction = B_to_A;
+                } else {
+                    revert INVALID_TOKEN();
+                }
+             } else {
+                 revert INVALID_TOKEN();
+            }
+        }
+
+        //4. gas saving, store reserves in local variables
+        uint reserveA = IERC20(tokenA).balanceOf(address(this));
+        uint reserveB = IERC20(tokenB).balanceOf(address(this));
+        uint amountOut;
+       
+        
+        //5. compute amount of tokens to transfer according to direction of swap
+        if (direction == A_to_B){
+            amountOut = getAmountOut(amountIn, reserveA, reserveB);
+        } else {
+            amountOut = getAmountOut(amountIn, reserveB, reserveA);
+        }
+
+        //6. check if minimum met
+        if (amountOut < amountOutMin) {
+            revert INSUFFICIENT_OUTPUT_AMOUNT();
+        }
+
+        //7. perform transfers and emit event
+        if (direction == A_to_B){
+            IERC20(tokenA).transferFrom(msg.sender, address(this), amountIn);
+            IERC20(tokenB).transfer(to, amountOut);
+            emit Swap(
+                    msg.sender, // sender
+                    to, // target address 
+                    amountIn, 
+                    0,     
+                    0, 
+                    amountOut
+                ); 
+        } else {
+            IERC20(tokenB).transferFrom(msg.sender, address(this), amountIn);
+            IERC20(tokenA).transfer(to, amountOut);
+            emit Swap(
+                    msg.sender, // sender
+                    to, // target address 
+                    0, 
+                    amountIn,     
+                    amountOut, 
+                    0
+                ); 
+        }
+
+        //7. assign the quantities in the stablished output array
+        amounts[0] = amountIn;
+        amounts[1] = amountOut;
+    } // swapExactTokensForTokens
+
+
+
+
+} // contract SimpleSwap
 
