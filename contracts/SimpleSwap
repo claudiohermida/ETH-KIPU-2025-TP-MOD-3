@@ -4,6 +4,9 @@ pragma solidity ^0.8.27;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+
+
 
 /// @title Interface for SimpleSwap
 interface ISimpleSwap {
@@ -34,7 +37,7 @@ interface ISimpleSwap {
         address[] calldata path,
         address to,
         uint256 deadline
-    ) external;
+    ) external returns (uint[] memory amounts);
 
     function getPrice(address tokenA, address tokenB) external view returns (uint256 price);
     function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) external view returns (uint256);
@@ -109,6 +112,11 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
                            ERRORS
       //////////////////////////////////////////////////////////////*/
 
+    /**
+      * @notice insufficient liquidity to calculate exchange price of tokens
+      */
+    error INSUFFICIENT_LIQUIDITY();
+
      /**
       * @notice invalid token address for interaction
       */
@@ -151,7 +159,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
       * @notice must be performed up to deadline
       */
     modifier onlyBeforeDeadline (uint deadline){
-        if (block.timestamp > deadeline) {
+        if (block.timestamp > deadline) {
             revert DEADLINE_EXPIRED();
         }
         _;
@@ -178,7 +186,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      * @param amountBDesired The maximum amount of tokenB the caller is willing to deposit.
      * @param reserveA The current reserve of tokenA in the pair contract.
      * @param reserveB The current reserve of tokenB in the pair contract.
-     * @return amounts The calculated actual amounts of tokenA and tokenB to be deposited.
+     * @return amountA amountB Amounts The calculated actual amounts of tokenA and tokenB to be deposited.
      */
     function _calculateAmountsToDeposit(
         uint amountADesired,
@@ -219,7 +227,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      * @param reserveA The current reserve of tokenA in the swap contract.
      * @param reserveB The current reserve of tokenB in the swap contract.
      * @param totalLP the total supply of LP_AB tokens minted so far.
-     * @return liquidtyTokens The amount of LP_AB tokens to mint.
+     * @return liquidityTokens The amount of LP_AB tokens to mint.
      */
     function _calculateLiquidityToMint(
         uint amountADeposited,
@@ -232,9 +240,9 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
          // uint totalLP = totalSupply();
         // check whether this is the inital liquidity provision
         if ( reserveA == 0 && reserveB == 0){
-            liquidityTokens = sqrt(amountADeposited * amountBDeposited);
+            liquidityTokens = Math.sqrt(amountADeposited * amountBDeposited);
         } else {
-            liquidityTokens = min((amountADeposited * totalLP)/reserveA, (amountBDeposited * totalLP)/reserveB);
+            liquidityTokens = Math.min((amountADeposited * totalLP)/reserveA, (amountBDeposited * totalLP)/reserveB);
         }
     }
 
@@ -245,7 +253,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      * @param reserveA The current reserve of tokenA in the swap contract.
      * @param reserveB The current reserve of tokenB in the swap contract.
      * @param totalLP the total supply of LP_AB tokens minted so far.
-     * @return amounts of A and B tokens to withdraw from the pool.
+     * @return amountAOut and amountBOut Amounts of A and B tokens to withdraw from the pool.
      */
     function _calculateExitLiquidity(
         uint liquidityToBurn,
@@ -301,7 +309,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         uint totalLP = totalSupply();
 
         // 2. compute the optimal amounts to deposit
-        (uint amountA, uint amountB) =  _calculateAmountsToDeposit(
+        (amountA, amountB) =  _calculateAmountsToDeposit(
                                              amountADesired,
                                              amountBDesired,
                                              reserveA,
@@ -318,7 +326,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         IERC20(tokenB).transferFrom(msg.sender, address(this), amountB);
 
         //5. calculate amount of liquidity tokens to mint
-        uint liquidityTokens =  _calculateLiquidityToMint(
+        liquidity =  _calculateLiquidityToMint(
                                     amountA,
                                     amountB,
                                     reserveA,
@@ -328,9 +336,9 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         //6. if we got a positive quantity, 
         // mint the corresponding tokens to the target address using the internal _mint
         // and emit the corresponding event
-        if (liquidityTokens > 0){
-            _mint(liquidityTokens,to);
-            emit LiquidityAdded(msg.sender, to, amountA, amountB, liquidityTokens); 
+        if (liquidity > 0){
+            _mint(to, liquidity);
+            emit LiquidityAdded(msg.sender, to, amountA, amountB, liquidity); 
         }
     } // addLiquidity
 
@@ -410,16 +418,16 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
 
         //3. verify validity of addresses and determine direction of swap
         SwapDirection direction;
-        if (_token0 == tokenA){
-            if (_token1 == tokenB){
-                direction = A_to_B;
+        if (_token0 == address(_tokenA)){
+            if (_token1 == address(_tokenB)){
+                direction = SwapDirection.A_to_B;
             } else {
                 revert INVALID_TOKEN();
             }
         } else {
-            if (_token0 == tokenB){
-                if (_token1 == tokenA){
-                   direction = B_to_A;
+            if (_token0 == address(_tokenB)){
+                if (_token1 == address(_tokenA)){
+                   direction = SwapDirection.B_to_A;
                 } else {
                     revert INVALID_TOKEN();
                 }
@@ -429,16 +437,24 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         }
 
         //4. gas saving, store reserves in local variables
-        uint reserveA = IERC20(_tokenA).balanceOf(address(this));
-        uint reserveB = IERC20(_tokenB).balanceOf(address(this));
+       //  uint reserveA = IERC20(_tokenA).balanceOf(address(this));
+        // uint reserveB = IERC20(_tokenB).balanceOf(address(this));
         uint amountOut;
        
         
         //5. compute amount of tokens to transfer according to direction of swap
-        if (direction == A_to_B){
-            amountOut = getAmountOut(amountIn, reserveA, reserveB);
+        if (direction == SwapDirection.A_to_B){
+            amountOut = getAmountOut(
+                            amountIn, 
+                            IERC20(_tokenA).balanceOf(address(this)),
+                            IERC20(_tokenB).balanceOf(address(this))
+                            );
         } else {
-            amountOut = getAmountOut(amountIn, reserveB, reserveA);
+            amountOut = getAmountOut(
+                            amountIn, 
+                            IERC20(_tokenB).balanceOf(address(this)), 
+                            IERC20(_tokenA).balanceOf(address(this))
+                            );
         }
 
         //6. check if minimum met
@@ -447,9 +463,9 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         }
 
         //7. perform transfers and emit event
-        if (direction == A_to_B){
-            IERC20(tokenA).transferFrom(msg.sender, address(this), amountIn);
-            IERC20(tokenB).transfer(to, amountOut);
+        if (direction == SwapDirection.A_to_B){
+            IERC20(_tokenA).transferFrom(msg.sender, address(this), amountIn);
+            IERC20(_tokenB).transfer(to, amountOut);
             emit Swap(
                     msg.sender, // sender
                     to, // target address 
@@ -459,8 +475,8 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
                     amountOut
                 ); 
         } else {
-            IERC20(tokenB).transferFrom(msg.sender, address(this), amountIn);
-            IERC20(tokenA).transfer(to, amountOut);
+            IERC20(_tokenB).transferFrom(msg.sender, address(this), amountIn);
+            IERC20(_tokenA).transfer(to, amountOut);
             emit Swap(
                     msg.sender, // sender
                     to, // target address 
@@ -503,12 +519,11 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      * @param amountIn The amount of tokens to exchange
      * @param reserveIn The amount of reserves of the input token
      * @param reserveOut The amount of reserves of the output token
-     * @return the amount of output tokens
+     * @return amountOut the amount of output tokens
      */  
-    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) public pure returns (uint256){
+    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) public pure returns (uint256 amountOut){
         amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
     }
 
     
 } // contract SimpleSwap
-
