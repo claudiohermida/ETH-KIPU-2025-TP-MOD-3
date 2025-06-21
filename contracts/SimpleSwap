@@ -68,20 +68,22 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     /**
      * @notice someone added liquidity to the pool
      * @param lProvider:  address of liquidity provider
+     * @param to:  address of receiver of liquidity tokens
      * @param amountAIn: amount of token A deposited
      * @param amountBIn: amount of token B deposited
      * @param liquidityTokensOut: amount of LP shares minted
      */
-    event LiquidityAdded(address indexed lProvider, uint amountAIn, uint amountBIn, uint liquidityTokensOut); 
+    event LiquidityAdded(address indexed lProvider, address indexed to, uint amountAIn, uint amountBIn, uint liquidityTokensOut); 
 
     /**
      * @notice some LP removed liquidity to the pool
      * @param lProvider:  address of liquidity provider
+     * @param to:  address of receiver of liquidity tokens
      * @param liquidityTokensIn: amount of LP shares burnt
      * @param amountAOut: amount of token A received/withdrawn
      * @param amountBOut: amount of token B received/withdrawn
      */
-    event LiquidityRemoved(address indexed lProvider, uint liquidityTokensIn, uint amountAOut, uint amountBOut); 
+    event LiquidityRemoved(address indexed lProvider, address indexed to, uint liquidityTokensIn, uint amountAOut, uint amountBOut); 
     
      /**
      * @notice a swap has been performed, 
@@ -292,7 +294,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         uint amountBMin,
         address to,
         uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity) onlyBeforeDeadline(deadline) onlyValidAddress(to) {
+    ) external onlyBeforeDeadline(deadline) onlyValidAddress(to) returns (uint amountA, uint amountB, uint liquidity){
         // 1. gas saving: we read the reserves into local variables, as they are used in various calculations
         uint reserveA = IERC20(tokenA).balanceOf(address(this));
         uint reserveB = IERC20(tokenB).balanceOf(address(this));
@@ -327,7 +329,58 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         // mint the corresponding tokens to the target address using the internal _mint
         // and emit the corresponding event
         if (liquidityTokens > 0){
-            _mint(liquidityTokens,msg.sender);
-            emit LiquidityAdded(msg.sender, amountA, amountB, liquidityTokens); 
+            _mint(liquidityTokens,to);
+            emit LiquidityAdded(msg.sender, to, amountA, amountB, liquidityTokens); 
         }
-}
+    } // addLiquidity
+
+         /**
+     * @dev Removes liquidity from the pool.
+     * @param tokenA The address of the first token.
+     * @param tokenB The address of the second token.
+     * @param liquidity The amount of LP_AB tokens to redeem
+     * @param amountAMin The minimum amount of tokenA to accept. Transaction reverts if less is issued.
+     * @param amountBMin The minimum amount of tokenB to accept. Transaction reverts if less is issued.
+     * @param to The address to receive the A and B tokens.
+     * @param deadline The unix timestamp after which the transaction will revert.
+     * @return amountA The amount of tokenA received.
+     * @return amountB The amount of tokenB received.
+     */
+     function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to,
+        uint256 deadline
+    ) external onlyBeforeDeadline(deadline) onlyValidAddress(to) returns (uint256 amountA, uint256 amountB){
+         // 1. gas saving: we read the reserves into local variables, as they are used in various calculations
+        uint reserveA = IERC20(tokenA).balanceOf(address(this));
+        uint reserveB = IERC20(tokenB).balanceOf(address(this));
+        uint totalLP = totalSupply();
+
+        //2. calculate the amount of tokens A and B to transfer
+        (amountA, amountB) = _calculateExitLiquidity(
+                                liquidity,
+                                reserveA,
+                                reserveB,
+                                totalLP
+                            );
+        
+         // 3. check whether required minimums are met
+        if (amountA < amountAMin || amountB < amountBMin){
+            revert INSUFFICIENT_LIQUIDITY();
+        } else {
+        //4. burn the liquidity tokens, calling the internal _burn function    
+            _burn(address(this),liquidity);
+        //5. transfer the A and B tokens to receiver
+        IERC20(tokenA).transfer(to, amountA);
+        IERC20(tokenB).transfer(to, amountB);
+        //6. emit the LiquidityRemoved event
+        emit LiquidityRemoved(msg.sender, to, liquidity, amountA, amountB);
+        }
+        
+    } // removeLiquidity
+
+
