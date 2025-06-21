@@ -167,7 +167,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
                            HELPER FUNCTIONS
       //////////////////////////////////////////////////////////////*/
 
-      /**
+    /**
      * @dev Calculates the optimal amount of tokenA and tokenB to add to the liquidity pool
      * based on desired amounts and current pool reserves.
      * @param amountADesired The maximum amount of tokenA the caller is willing to deposit.
@@ -182,6 +182,8 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         uint reserveA,
         uint reserveB
     ) internal pure returns (uint amountA, uint amountB) {
+   //     uint reserveA = tokenA.balanceOf(address(this));
+   //     uint reserveB = tokenB.balanceOf(address(this));
         if (reserveA == 0 && reserveB == 0) {
             // First liquidity provision for this pair.
             // In this simplified example, we'll just use the desired amounts directly.
@@ -204,7 +206,53 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         }
     }
 
+    /**
+     * @dev Calculates the amount of liquidity tokens to mint,
+     * based on deposited amounts and current pool reserves.
+     * Special case: initial liquidity provision, no reserves.
+     * @param amountADeposited amount of tokens A deposited.
+     * @param amountBDeposited amount of tokens B deposited.
+     * @param reserveA The current reserve of tokenA in the swap contract.
+     * @param reserveB The current reserve of tokenB in the swap contract.
+     * @param totalLP the total supply of LP_AB tokens minted so far.
+     * @return liquidtyTokens The amount of LP_AB tokens to mint.
+     */
+    function _calculateLiquidityToMint(
+        uint amountADeposited,
+        uint amountBDeposited,
+        uint reserveA,
+        uint reserveB,
+        uint totalLP
+    ) internal pure returns (uint liquidityTokens){
+        // gas saving: we read totalSupply() state variable into a local one
+         // uint totalLP = totalSupply();
+        // check whether this is the inital liquidity provision
+        if ( reserveA == 0 && reserveB == 0){
+            liquidityTokens = sqrt(amountADeposited * amountBDeposited);
+        } else {
+            liquidityTokens = min((amountADeposited * totalLP)/reserveA, (amountBDeposited * totalLP)/reserveB)
+        }
+    }
 
+    /**
+     * @dev Calculates the amount of tokens to withdraw when redeeming liquidity,
+     * based on current pool reserves.
+     * @param liquidityToBurn amount of liquidity tokens to redeem.
+     * @param reserveA The current reserve of tokenA in the swap contract.
+     * @param reserveB The current reserve of tokenB in the swap contract.
+     * @param totalLP the total supply of LP_AB tokens minted so far.
+     * @return amounts of A and B tokens to withdraw from the pool.
+     */
+    function _calculateExitLiquidity(
+        uint liquidityToBurn,
+        uint reserveA,
+        uint reserveB,
+        uint totalLP
+    ) internal pure returns (uint amountAOut, uint amountBOut){
+        // we could check totalLP != 0, but let Solidity safe math take care of it
+        amountAOut = (liquidityToBurn * reserveA) / totalLP;
+        amountBOut = (liquidityToBurn * reserveB) / totalLP;
+    }
 
     /*///////////////////////////////////////////////////////////////
                           CONSTRUCTOR
@@ -218,4 +266,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     /*///////////////////////////////////////////////////////////////
                            LOGIC
       //////////////////////////////////////////////////////////////*/
+
+
+
 }
