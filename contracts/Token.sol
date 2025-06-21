@@ -10,4 +10,9 @@ contract MyToken is ERC20, Ownable {
         ERC20(name, symbol)
         Ownable(msg.sender)
     {}
+
+    // want to mint tokens at will
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
 }
