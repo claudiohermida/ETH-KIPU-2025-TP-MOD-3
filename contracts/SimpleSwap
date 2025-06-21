@@ -234,7 +234,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         if ( reserveA == 0 && reserveB == 0){
             liquidityTokens = sqrt(amountADeposited * amountBDeposited);
         } else {
-            liquidityTokens = min((amountADeposited * totalLP)/reserveA, (amountBDeposited * totalLP)/reserveB)
+            liquidityTokens = min((amountADeposited * totalLP)/reserveA, (amountBDeposited * totalLP)/reserveB);
         }
     }
 
@@ -263,7 +263,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
       //////////////////////////////////////////////////////////////*/
     constructor(address tokenA_, address tokenB_) ERC20("LPShares_AB","LP_AB"){
         _tokenA = IERC20(tokenA_);
-        _tokenB = IERC20(tokenB_)
+        _tokenB = IERC20(tokenB_);
     }
 
 
@@ -318,7 +318,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         IERC20(tokenB).transferFrom(msg.sender, address(this), amountB);
 
         //5. calculate amount of liquidity tokens to mint
-        (uint liquidityTokens =  _calculateLiquidityToMint(
+        uint liquidityTokens =  _calculateLiquidityToMint(
                                     amountA,
                                     amountB,
                                     reserveA,
@@ -403,7 +403,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
             ) external onlyBeforeDeadline(deadline) onlyValidAddress(to) returns (uint[] memory amounts){
         // must determine the direction of the swap A_to_B or B_to_A
         // 1. check path has the right length
-        if (path.length != 2) {revert INVALID_SWAP_ROUTE()}
+        if (path.length != 2) { revert INVALID_SWAP_ROUTE(); }
 
         //2. obtain the address of the tokens in question
         (address _token0, address _token1) = (path[0], path[1]);
@@ -429,8 +429,8 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         }
 
         //4. gas saving, store reserves in local variables
-        uint reserveA = IERC20(tokenA).balanceOf(address(this));
-        uint reserveB = IERC20(tokenB).balanceOf(address(this));
+        uint reserveA = IERC20(_tokenA).balanceOf(address(this));
+        uint reserveB = IERC20(_tokenB).balanceOf(address(this));
         uint amountOut;
        
         
