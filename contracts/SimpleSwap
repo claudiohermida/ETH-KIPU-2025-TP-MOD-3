@@ -92,7 +92,14 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      * @param amountAOut: amount of token A received/withdrawn
      * @param amountBOut: amount of token B received/withdrawn
      */
-    event Swap(address indexed sender, address indexed receiver, uint amountAIn, uint amountBIn, uint amountAOut, uint amountBOut); 
+    event Swap(
+        address indexed sender, 
+        address indexed receiver, 
+        uint amountAIn, 
+        uint amountBIn,     
+        uint amountAOut, 
+        uint amountBOut
+    ); 
 
      /*///////////////////////////////////////////////////////////////
                            ERRORS
@@ -132,14 +139,83 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
       */
     error INVALID_SWAP_ROUTE();
 
+     /*///////////////////////////////////////////////////////////////
+                           MODFIFIERS
+      //////////////////////////////////////////////////////////////*/
+
+    /**
+      * @notice must be performed up to deadline
+      */
+    modifier onlyBeforeDeadline (uint deadline){
+        if (block.timestamp > deadeline) {
+            revert DEADLINE_EXPIRED();
+        }
+        _;
+    }
+
+    /**
+      * @notice must not use address(0)
+      */
+    modifier onlyValidAddress (address to){
+        if (to == address(0)) {
+            revert INVALID_TO();
+        }
+        _;
+    }
+
+    /*///////////////////////////////////////////////////////////////
+                           HELPER FUNCTIONS
+      //////////////////////////////////////////////////////////////*/
+
+      /**
+     * @dev Calculates the optimal amount of tokenA and tokenB to add to the liquidity pool
+     * based on desired amounts and current pool reserves.
+     * @param amountADesired The maximum amount of tokenA the caller is willing to deposit.
+     * @param amountBDesired The maximum amount of tokenB the caller is willing to deposit.
+     * @param reserveA The current reserve of tokenA in the pair contract.
+     * @param reserveB The current reserve of tokenB in the pair contract.
+     * @return amounts The calculated actual amounts of tokenA and tokenB to be deposited.
+     */
+    function _calculateAmountsToDeposit(
+        uint amountADesired,
+        uint amountBDesired,
+        uint reserveA,
+        uint reserveB
+    ) internal pure returns (uint amountA, uint amountB) {
+        if (reserveA == 0 && reserveB == 0) {
+            // First liquidity provision for this pair.
+            // In this simplified example, we'll just use the desired amounts directly.
+            // A real Uniswap Router would likely ensure both are non-zero.
+            return (amountADesired, amountBDesired);
+        }
+
+        // Calculate amountB needed if we use all of amountADesired at current ratio
+        uint amountBOptimal = (amountADesired * reserveB) / reserveA;
+
+        if (amountBOptimal <= amountBDesired) {
+            // We have enough B to match desired A
+            amountA = amountADesired;
+            amountB = amountBOptimal;
+        } else {
+            // We don't have enough B, so use all of desired B and calculate A
+            uint amountAOptimal = (amountBDesired * reserveA) / reserveB;
+            amountA = amountAOptimal;
+            amountB = amountBDesired;
+        }
+    }
 
 
-// modifiers
 
-
-
+    /*///////////////////////////////////////////////////////////////
+                          CONSTRUCTOR
+      //////////////////////////////////////////////////////////////*/
     constructor(address tokenA_, address tokenB_) ERC20("LPShares_AB","LP_AB"){
         _tokenA = IERC20(tokenA_);
         _tokenB = IERC20(tokenB_)
-    ]
+    }
+
+
+    /*///////////////////////////////////////////////////////////////
+                           LOGIC
+      //////////////////////////////////////////////////////////////*/
 }
