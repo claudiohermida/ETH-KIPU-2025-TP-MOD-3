@@ -476,7 +476,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         amounts[1] = amountOut;
     } // swapExactTokensForTokens
 
-     /**
+    /**
      * @dev return the price of token A in terms of tokenB, according to current reserves
      * @param tokenA The address of the first token.
      * @param tokenB The address of the second token.
@@ -496,6 +496,19 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
 
     }
 
+    /**
+     * @dev return the amount of tokens to obtain in exchange for amountIn, according to current reserves
+     * we use public rather than external as we also use this function in swapExactTokensForTokens
+     * if there is no reserveIn and a zero amountIn, it will fail for division by zero.
+     * @param amountIn The amount of tokens to exchange
+     * @param reserveIn The amount of reserves of the input token
+     * @param reserveOut The amount of reserves of the output token
+     * @return the amount of output tokens
+     */  
+    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut) public pure returns (uint256){
+        amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
+    }
 
+    
 } // contract SimpleSwap
 
