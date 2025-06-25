@@ -236,7 +236,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         // gas saving: we read totalSupply() state variable into a local one
          // uint totalLP = totalSupply();
         // check whether this is the inital liquidity provision
-        if ( reserveA == 0 && reserveB == 0){
+        if (_totalSupply == 0){  // ( reserveA == 0 && reserveB == 0)
             liquidityTokens = Math.sqrt(amountADeposited * amountBDeposited);
         } else {
             liquidityTokens = Math.min((amountADeposited * totalLP)/reserveA, (amountBDeposited * totalLP)/reserveB);
@@ -420,10 +420,10 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
                 revert INVALID_TOKEN();
             } else if (_tokenOut != address(_tokenA)) { // _token0 == tokenB
                        revert INVALID_TOKEN();
+            } 
         } else if (_tokenOut != address(_tokenB)) { // _token0 == tokenA
                    revert INVALID_TOKEN();
-        }     
-
+        }
         //4. gas saving, store reserves in local variables
        //  uint reserveIn = IERC20(_token0).balanceOf(address(this));
         uint reserveOut = IERC20(_token1).balanceOf(address(this));
