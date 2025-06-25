@@ -376,7 +376,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
             revert INSUFFICIENT_LIQUIDITY();
         } else {
         //4. burn the liquidity tokens, calling the internal _burn function    
-            _burn(address(this),liquidity);
+             _burn(msg.sender,liquidity);
         //5. transfer the A and B tokens to receiver
         IERC20(tokenA).transfer(to, amountA);
         IERC20(tokenB).transfer(to, amountB);
