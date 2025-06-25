@@ -48,13 +48,7 @@ interface ISimpleSwap {
 contract SimpleSwap is ISimpleSwap, ERC20 {
 
 
-     /*///////////////////////////////////////////////////////////////
-                           TYPES
-      //////////////////////////////////////////////////////////////*/
-
-    enum SwapDirection {
-        A_to_B, B_to_A
-    }
+   
 
      /*///////////////////////////////////////////////////////////////
                            STATE
@@ -89,23 +83,21 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
     event LiquidityRemoved(address indexed lProvider, address indexed to, uint liquidityTokensIn, uint amountAOut, uint amountBOut); 
     
      /**
-     * @notice a swap has been performed, 
-     * either from A to B, in which case amountBIn == amountAOut == 0,
-     * or from B to A, in which case amountAIn == amountBOut == 0
+     * @notice a swap has been performed from tokenIn into tokenOut
      * @param sender:  address of provider of input tokens
      * @param receiver: address of recipient of output tokens
-     * @param amountAIn: amount of token A deposited
-     * @param amountBIn: amount of token B deposited
-     * @param amountAOut: amount of token A received/withdrawn
-     * @param amountBOut: amount of token B received/withdrawn
+     * @param tokenIn: address of token deposited 
+     * @param tokenOut: address of token received
+     * @param amountAOut: amount of token deposite
+     * @param amountBOut: amount of token received/withdrawn
      */
     event Swap(
         address indexed sender, 
         address indexed receiver, 
-        uint amountAIn, 
-        uint amountBIn,     
-        uint amountAOut, 
-        uint amountBOut
+        address tokenIn, 
+        address tokenOut,     
+        uint amountIn, 
+        uint amountOut
     ); 
 
      /*///////////////////////////////////////////////////////////////
@@ -132,6 +124,11 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
       * below minimum desired
       */
     error INSUFFICIENT_OUTPUT_AMOUNT();
+
+    /**
+      * @notice insufficient liquidity to swap or to fulfill a liquidity withdrawal
+      */
+    error INSUFFICIENT_LIQUIDITY();
 
     /**
       * @notice proposed liquidity provision would unbalance pool, 
@@ -409,85 +406,60 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
                 address to,     
                 uint deadline
             ) external onlyBeforeDeadline(deadline) onlyValidAddress(to) returns (uint[] memory amounts){
-        // must determine the direction of the swap A_to_B or B_to_A
         // 1. check path has the right length
         if (path.length != 2) { revert INVALID_SWAP_ROUTE(); }
 
-        //2. obtain the address of the tokens in question
-        (address _token0, address _token1) = (path[0], path[1]);
+        //2. obtain the address of the tokens in question, saving gas in multiple reads from array
+        (address _tokenIn, address _tokenOut) = (path[0], path[1]);
 
-        //3. verify validity of addresses and determine direction of swap
+        //3. verify validity of addresses,
+        // must be either _tokenA or _tokenB and different from each other
         SwapDirection direction;
-        if (_token0 == address(_tokenA)){
-            if (_token1 == address(_tokenB)){
-                direction = SwapDirection.A_to_B;
-            } else {
+        if (_tokenIn != address(_tokenA)){
+            if (_tokenIn != address(_tokenB)){
                 revert INVALID_TOKEN();
-            }
-        } else {
-            if (_token0 == address(_tokenB)){
-                if (_token1 == address(_tokenA)){
-                   direction = SwapDirection.B_to_A;
-                } else {
-                    revert INVALID_TOKEN();
-                }
-             } else {
-                 revert INVALID_TOKEN();
-            }
-        }
+            } else if (_tokenOut != address(_tokenA)) { // _token0 == tokenB
+                       revert INVALID_TOKEN();
+        } else if (_tokenOut != address(_tokenB)) { // _token0 == tokenA
+                   revert INVALID_TOKEN();
+        }     
 
         //4. gas saving, store reserves in local variables
-       //  uint reserveA = IERC20(_tokenA).balanceOf(address(this));
-        // uint reserveB = IERC20(_tokenB).balanceOf(address(this));
+       //  uint reserveIn = IERC20(_token0).balanceOf(address(this));
+        uint reserveOut = IERC20(_token1).balanceOf(address(this));
         uint amountOut;
        
         
-        //5. compute amount of tokens to transfer according to direction of swap
-        if (direction == SwapDirection.A_to_B){
-            amountOut = getAmountOut(
+        //5. compute amount of tokens to transfer 
+        amountOut = getAmountOut(
                             amountIn, 
-                            IERC20(_tokenA).balanceOf(address(this)),
-                            IERC20(_tokenB).balanceOf(address(this))
+                            IERC20(_tokenIn).balanceOf(address(this)), // reserve0
+                            reserveOut
                             );
-        } else {
-            amountOut = getAmountOut(
-                            amountIn, 
-                            IERC20(_tokenB).balanceOf(address(this)), 
-                            IERC20(_tokenA).balanceOf(address(this))
-                            );
-        }
+        
 
         //6. check if minimum met
         if (amountOut < amountOutMin) {
             revert INSUFFICIENT_OUTPUT_AMOUNT();
         }
-
-        //7. perform transfers and emit event
-        if (direction == SwapDirection.A_to_B){
-            IERC20(_tokenA).transferFrom(msg.sender, address(this), amountIn);
-            IERC20(_tokenB).transfer(to, amountOut);
-            emit Swap(
-                    msg.sender, // sender
-                    to, // target address 
-                    amountIn, 
-                    0,     
-                    0, 
-                    amountOut
-                ); 
-        } else {
-            IERC20(_tokenB).transferFrom(msg.sender, address(this), amountIn);
-            IERC20(_tokenA).transfer(to, amountOut);
-            emit Swap(
-                    msg.sender, // sender
-                    to, // target address 
-                    0, 
-                    amountIn,     
-                    amountOut, 
-                    0
-                ); 
+        //7. check sufficient liquidity
+        if (amountOut > reserveOut) {
+            revert INSUFFICIENT_LIQUIDITY();
         }
 
-        //7. assign the quantities in the stablished output array
+        //8. perform transfers and emit event
+        IERC20(_tokenIn).transferFrom(msg.sender, address(this), amountIn);
+        IERC20(_tokenOut).transfer(to, amountOut);
+        emit Swap( 
+            msg.sender, // sender
+            to, // target address 
+            _tokenIn, // input token 
+            _tokenOut, // output token    
+            amountIn, 
+            amountOut
+            );
+        //9. assign the quantities in the stablished output array
+        amounts = new uint[](2);
         amounts[0] = amountIn;
         amounts[1] = amountOut;
     } // swapExactTokensForTokens
