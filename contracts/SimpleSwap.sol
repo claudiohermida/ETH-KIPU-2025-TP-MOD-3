@@ -1,3 +1,35 @@
+// Order of Layout
+// Contract elements should be laid out in the following order:
+
+// Pragma statements
+
+// Import statements
+
+// Events
+
+// Errors
+
+// Interfaces
+
+// Libraries
+
+// Contracts
+
+// Inside each contract, library or interface, use the following order:
+
+// Type declarations
+
+// State variables
+
+// Events
+
+// Errors
+
+// Modifiers
+
+// Functions
+
+
 // SPDX-License-Identifier: MIT
 // Compatible with OpenZeppelin Contracts ^5.0.0
 pragma solidity ^0.8.27;
@@ -49,7 +81,26 @@ interface ISimpleSwap {
 contract SimpleSwap is ISimpleSwap, ERC20 {
 
 
-   
+    /*///////////////////////////////////////////////////////////////
+                           TYPES
+     //////////////////////////////////////////////////////////////*/
+
+    /** @notice Local state of the swapExactTokensForTokens function
+     *  @dev This struct is used to store the local state of the swap operation, 
+     *  @param tokenIn: address of input token
+     *  @param tokenOut: address of output token
+     *  @param reserveIn: reserve of input token in the swap contract
+     *  @param reserveOut: reserve of output token in the swap contract
+     *  @param amountOut: amount of output token to be received
+     */
+    struct SwapLocalState{
+        address tokenIn; 
+        address tokenOut;  
+        uint reserveIn;
+        uint reserveOut;
+        uint amountOut;
+    }
+
 
      /*///////////////////////////////////////////////////////////////
                            STATE
@@ -230,7 +281,7 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
         uint reserveA,
         uint reserveB,
         uint totalLP
-    ) internal view returns (uint liquidityTokens){
+    ) internal pure returns (uint liquidityTokens){
         // check whether this is the inital liquidity provision
         if (totalLP == 0){  // ( reserveA == 0 && reserveB == 0)
             liquidityTokens = Math.sqrt(amountADeposited * amountBDeposited);
@@ -391,69 +442,67 @@ contract SimpleSwap is ISimpleSwap, ERC20 {
      * @param path The route of token addresses to follow 
      * (in our case, only 2, either [tokenA,tokenB] or [tokenB,tokenA])
      * @param to The address to receive the exchanged tokens.
-     * @param deadline The unix timestamp after which the transaction will revert. */
-  //   * @return amounts The amount of tokens in and out along the path 
-  //   * (only 2 in our case, hence the amount of token in and out)
-   //   */
-     function swapExactTokensForTokens(
+     * @param deadline The unix timestamp after which the transaction will revert. 
+     */
+    function swapExactTokensForTokens(
                 uint amountIn, 
                 uint amountOutMin, 
                 address[] calldata path, 
                 address to,     
                 uint deadline
-            ) external onlyBeforeDeadline(deadline) onlyValidAddress(to) 
+            ) external onlyBeforeDeadline(deadline) onlyValidAddress(to){ 
            // returns (uint[] memory amounts)
-            {
+        //0. setup a struct to store local state        
+        SwapLocalState memory localState;
         // 1. check path has the right length
         if (path.length != 2) { revert INVALID_SWAP_ROUTE(); }
 
         //2. obtain the address of the tokens in question, saving gas in multiple reads from array
-        (address _tokenIn, address _tokenOut) = (path[0], path[1]);
+        (localState.tokenIn, localState.tokenOut) = (path[0], path[1]);
 
         //3. verify validity of addresses,
         // must be either _tokenA or _tokenB and different from each other
-        if (_tokenIn != address(_tokenA)){
-            if (_tokenIn != address(_tokenB)){
+        if (localState.tokenIn != address(_tokenA)){
+            if (localState.tokenIn != address(_tokenB)){
                 revert INVALID_TOKEN();
-            } else if (_tokenOut != address(_tokenA)) { // _token0 == tokenB
+            } else if (localState.tokenOut != address(_tokenA)) { // tokenIn == tokenB
                        revert INVALID_TOKEN();
             } 
-        } else if (_tokenOut != address(_tokenB)) { // _token0 == tokenA
+        } else if (localState.tokenOut != address(_tokenB)) { // tokenIn == tokenA
                    revert INVALID_TOKEN();
         }
         //4. gas saving, store reserves in local variables
-       //  uint reserveIn = IERC20(_token0).balanceOf(address(this));
-        // uint reserveOut = IERC20(_tokenOut).balanceOf(address(this));
-        uint amountOut;
-       
+        localState.reserveIn = IERC20(localState.tokenIn).balanceOf(address(this));
+        localState.reserveOut = IERC20(localState.tokenOut).balanceOf(address(this));
+        
         
         //5. compute amount of tokens to transfer 
-        amountOut = getAmountOut(
-                            amountIn, 
-                            IERC20(_tokenIn).balanceOf(address(this)), // reserve0
-                            IERC20(_tokenOut).balanceOf(address(this)) // we would use reserveOut, but ¨stack too deep"
-                            );
+        localState.amountOut = getAmountOut(
+            amountIn, 
+            localState.reserveIn,
+            localState.reserveOut
+        );
         
 
         //6. check if minimum met
-        if (amountOut < amountOutMin) {
+        if (localState.amountOut < amountOutMin) {
             revert INSUFFICIENT_OUTPUT_AMOUNT();
         }
         //7. check sufficient liquidity
-        if (amountOut > IERC20(_tokenOut).balanceOf(address(this))) {
+        if (localState.amountOut > localState.reserveOut) {
             revert INSUFFICIENT_LIQUIDITY();
         }
 
         //8. perform transfers and emit event
-        IERC20(_tokenIn).transferFrom(msg.sender, address(this), amountIn);
-        IERC20(_tokenOut).transfer(to, amountOut);
+        IERC20(localState.tokenIn).transferFrom(msg.sender, address(this), amountIn);
+        IERC20(localState.tokenOut).transfer(to, localState.amountOut);
          emit Swap( 
               msg.sender, // sender
               to, // target address 
-              _tokenIn, // input token 
-              _tokenOut, // output token    
+              localState.tokenIn, // input token 
+              localState.tokenOut, // output token    
               amountIn, 
-              amountOut
+              localState.amountOut
          );
         //9. assign the quantities in the stablished output array
       // amounts = new uint[](2);
