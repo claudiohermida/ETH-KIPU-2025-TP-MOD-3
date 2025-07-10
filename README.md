@@ -59,10 +59,10 @@ Uniswap V2 (<a href="https://docs.uniswap.org/contracts/v2/reference/smart-contr
 - `swapExactTokensForTokens`: the user supplies a number of tokens (either `A` or`B`) and receives a proportional number of tokens according to the formula
   
 ```Solidity
-amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)
+  amountOut = (amountIn * reserveOut) / (reserveIn + amountIn)
 ```
 
-setting up a minimum accetable of tokens tokens `B` or`A` to receive as slippage protection.
+  setting up a minimum accetable of tokens tokens `B` or`A` to receive as slippage protection.
 
 - `getPrice`: yields the current price of token `A` in terms of token `B` with the formula
  
